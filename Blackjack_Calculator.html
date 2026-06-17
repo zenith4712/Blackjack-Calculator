@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blackjack Calculator with Penetration</title>
+<style>
+  body {
+    font-family: Georgia, "Times New Roman", serif;
+    color: #000;
+    background: #fff;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 24px;
+    line-height: 1.45;
+  }
+  h2, h3 { font-weight: bold; margin: 1.4em 0 0.3em; }
+  h2 { font-size: 1.2em; }
+  h3 { font-size: 1.05em; }
+  p { margin: 0.2em 0 0.6em; }
+  .intro { font-style: italic; }
+  #rules { margin: 0.4em 0 1em; }
+  #rules .group { margin: 0.5em 0; }
+  #rules .group-title { font-weight: bold; font-size: 0.9em; margin-bottom: 0.2em; }
+  #rules label {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 2px 0;
+  }
+  #rules .delta { margin-left: auto; font-variant-numeric: tabular-nums; }
+  .metric, [id^="m-"] { font-variant-numeric: tabular-nums; }
+  .metric-row { display: flex; flex-wrap: wrap; gap: 18px; margin: 0.4em 0 0.8em; }
+  .metric-row > div { min-width: 130px; }
+  .metric-row .mlabel { font-size: 0.85em; }
+  .metric-row .mval { font-weight: bold; font-size: 1.1em; }
+  .controls > div { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+  .controls label { width: 110px; display: inline-block; }
+  .controls span[id$="-out"] { width: 56px; text-align: right; font-variant-numeric: tabular-nums; }
+  label { font-size: 1em; }
+  input[type="range"] { vertical-align: middle; flex: 1; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0.3em 0 1em;
+    font-size: 0.95em;
+  }
+  th, td {
+    border: 1px solid #000;
+    padding: 3px 5px;
+    text-align: center;
+  }
+  th { font-weight: bold; }
+  .legend { font-size: 0.85em; margin-top: 1em; }
+</style>
+</head>
+<body>
+<p class="intro">Interactive blackjack calculator with penetration: adjust casino rules and penetration to see house edge, realised edge, Kelly bet sizing, risk of ruin, hourly earnings, and basic strategy with Hi-Lo deviations.</p>
+
+<div>
+  <h3>Rule set</h3>
+  <p>Toggle rules to see live deltas. Baseline: 6-deck, S17, DAS, 3:2, no surrender (house edge &minus;0.50%, break-even TC +1.0).</p>
+</div>
+
+<div id="rules"></div>
+
+<div class="metric-row">
+  <div><div class="mlabel">House edge (TC 0)</div><div class="mval" id="m-edge">&mdash;</div></div>
+  <div><div class="mlabel">Break-even TC</div><div class="mval" id="m-beven">&mdash;</div></div>
+  <div><div class="mlabel">Countable?</div><div class="mval" id="m-count">&mdash;</div></div>
+</div>
+
+<div>
+  <h3>Penetration &amp; table conditions</h3>
+  <p>Penetration scales how often favourable counts are reached &mdash; it drives realised edge and hourly rate, not the per-hand numbers.</p>
+</div>
+
+<div class="controls">
+  <div><label>Penetration</label><input type="range" min="40" max="90" value="75" step="5" id="pen" /><span id="pen-out">75%</span></div>
+  <div><label>Hands / hour</label><input type="range" min="50" max="200" value="100" step="10" id="hph" /><span id="hph-out">100</span></div>
+  <div><label>Avg bet $</label><input type="range" min="5" max="500" value="25" step="5" id="avg" /><span id="avg-out">25</span></div>
+</div>
+<div class="metric-row">
+  <div><div class="mlabel">Realised edge</div><div class="mval" id="m-realedge">&mdash;</div></div>
+  <div><div class="mlabel">Action / hour</div><div class="mval" id="m-action">&mdash;</div></div>
+  <div><div class="mlabel">Hourly earnings (EV)</div><div class="mval" id="m-hourly">&mdash;</div></div>
+</div>
+
+<div>
+  <h3>Per-hand: edge, Kelly &amp; risk of ruin</h3>
+  <p>At your chosen true count, on the bankroll below. (Penetration does not affect these.)</p>
+</div>
+
+<div class="controls">
+  <div><label>True count</label><input type="range" min="-2" max="8" value="2" step="1" id="tc" /><span id="tc-out">+2</span></div>
+  <div><label>Bankroll $</label><input type="range" min="500" max="100000" value="10000" step="500" id="br" /><span id="br-out">10,000</span></div>
+  <div><label>Kelly frac</label><input type="range" min="0.25" max="1" value="0.5" step="0.25" id="kf" /><span id="kf-out">0.5&times;</span></div>
+</div>
+<div class="metric-row">
+  <div><div class="mlabel">Edge at TC</div><div class="mval" id="m-tcedge">&mdash;</div></div>
+  <div><div class="mlabel">Full-Kelly bet</div><div class="mval" id="m-bet">&mdash;</div></div>
+  <div><div class="mlabel">Your bet (frac)</div><div class="mval" id="m-fbet">&mdash;</div></div>
+  <div><div class="mlabel">Risk of ruin</div><div class="mval" id="m-ror">&mdash;</div></div>
+</div>
+
+<div>
+  <h3>Hard totals</h3>
+  <p id="strat-note">Basic strategy with Hi-Lo index deviations (action / index).</p>
+</div>
+<div><table id="t-hard"></table></div>
+
+<div><h3>Soft totals</h3></div>
+<div><table id="t-soft"></table></div>
+
+<div><h3>Pair splitting</h3></div>
+<div><table id="t-split"></table></div>
+
+<div class="legend">
+  <span>Legend:</span> H = hit, S = stand, D = double (else hit), Ds = double (else stand), P = split, R = surrender (else hit). Index <span>X&ge;n</span> / <span>X&le;n</span> = take action X at true count &ge;/&le; n. Insurance: take at TC &ge; +3 (not tabled). Variance &sigma;&sup2; = 1.3. Realised edge is a penetration- and selectivity-scaled estimate of the average player edge over a session; treat hourly figures as illustrative, not exact.
+</div>
+
+<script>
+(function(){
+  var dealerCols = ["2","3","4","5","6","7","8","9","10","A"];
+
+  // --- Rule model -----------------------------------------------------------
+  // Baseline chosen so the DEFAULT state (6-deck, S17, DAS, 3:2, no surrender)
+  // gives exactly -0.50% and break-even TC +1.0, matching the essay.
+  var BASE = -0.50;
+  var SIGMA2 = 1.3;
+  var SLOPE = 0.5;
+
+  // Independent toggles (stack freely).
+  var toggleDefs = [
+    {id:"h17",   label:"Dealer hits soft 17", delta:-0.20, on:false},
+    {id:"nodas", label:"No double after split", delta:-0.14, on:false},
+    {id:"rsa",   label:"Re-split aces allowed", delta:0.08, on:false},
+    {id:"ls",    label:"Late surrender", delta:0.08, on:false},
+    {id:"d910",  label:"Double 9-11 only", delta:-0.09, on:false},
+    {id:"peek",  label:"No hole-card / no peek", delta:-0.11, on:false}
+  ];
+
+  // Mutually exclusive groups (radio). First option in each is the baseline (delta 0).
+  var groupDefs = [
+    {id:"decks", title:"Decks", sel:0, opts:[
+      {id:"d6", label:"6 decks", delta:0.00},
+      {id:"d8", label:"8 decks", delta:-0.02},
+      {id:"d2", label:"Double deck", delta:0.19},
+      {id:"d1", label:"Single deck", delta:0.48}
+    ]},
+    {id:"payout", title:"Blackjack payout", sel:0, opts:[
+      {id:"p32", label:"3:2", delta:0.00},
+      {id:"p65", label:"6:5", delta:-1.39},
+      {id:"p21", label:"2:1", delta:2.27}
+    ]}
+  ];
+
+  function tog(id){ return toggleDefs.find(function(t){return t.id===id;}); }
+  function groupSel(gid){ var g=groupDefs.find(function(x){return x.id===gid;}); return g.opts[g.sel]; }
+
+  function houseEdge(){
+    var e = BASE;
+    toggleDefs.forEach(function(r){ if(r.on) e += r.delta; });
+    groupDefs.forEach(function(g){ e += g.opts[g.sel].delta; });
+    return e;
+  }
+
+  function fmtPct(x){ return (x>=0?"+":"") + x.toFixed(2) + "%"; }
+  function fmtMoney(x){ return (x<0?"-$":"$") + Math.abs(x).toLocaleString(undefined,{maximumFractionDigits:0}); }
+
+  // --- Rule UI --------------------------------------------------------------
+  function renderRules(){
+    var c = document.getElementById("rules");
+    c.innerHTML = "";
+
+    groupDefs.forEach(function(g){
+      var wrap = document.createElement("div");
+      wrap.className = "group";
+      var t = document.createElement("div");
+      t.className = "group-title";
+      t.textContent = g.title;
+      wrap.appendChild(t);
+      g.opts.forEach(function(opt, i){
+        var lab = document.createElement("label");
+        var rb = document.createElement("input");
+        rb.type = "radio"; rb.name = "grp-"+g.id; rb.checked = (g.sel===i);
+        rb.addEventListener("change", function(){ g.sel = i; update(); });
+        var txt = document.createElement("span");
+        txt.textContent = opt.label;
+        var d = document.createElement("span");
+        d.className = "delta";
+        d.textContent = fmtPct(opt.delta);
+        lab.appendChild(rb); lab.appendChild(txt); lab.appendChild(d);
+        wrap.appendChild(lab);
+      });
+      c.appendChild(wrap);
+    });
+
+    var tw = document.createElement("div");
+    tw.className = "group";
+    var tt = document.createElement("div");
+    tt.className = "group-title";
+    tt.textContent = "Other rules";
+    tw.appendChild(tt);
+    toggleDefs.forEach(function(r){
+      var lab = document.createElement("label");
+      var cb = document.createElement("input");
+      cb.type = "checkbox"; cb.checked = r.on;
+      cb.addEventListener("change", function(){ r.on = cb.checked; update(); });
+      var txt = document.createElement("span");
+      txt.textContent = r.label;
+      var d = document.createElement("span");
+      d.className = "delta";
+      d.textContent = fmtPct(r.delta);
+      lab.appendChild(cb); lab.appendChild(txt); lab.appendChild(d);
+      tw.appendChild(lab);
+    });
+    c.appendChild(tw);
+  }
+
+  // --- Strategy tables ------------------------------------------------------
+  function buildTable(tbl, rowLabel, rows){
+    tbl.innerHTML = "";
+    var thead = document.createElement("tr");
+    var corner = document.createElement("th");
+    corner.textContent = rowLabel;
+    thead.appendChild(corner);
+    dealerCols.forEach(function(col){
+      var th = document.createElement("th");
+      th.textContent = col;
+      thead.appendChild(th);
+    });
+    tbl.appendChild(thead);
+    rows.forEach(function(row){
+      var tr = document.createElement("tr");
+      var rl = document.createElement("td");
+      rl.textContent = row.label;
+      tr.appendChild(rl);
+      row.cells.forEach(function(cell){
+        var td = document.createElement("td");
+        if(cell.indexOf("/") > -1){
+          var parts = cell.split("/");
+          td.innerHTML = parts[0].trim() + " / " + parts[1].trim();
+        } else {
+          td.textContent = cell;
+        }
+        tr.appendChild(td);
+      });
+      tbl.appendChild(tr);
+    });
+  }
+
+  function hardRows(surr){
+    var r16 = surr
+      ? ["S","S","S","S","S","H","H","H/R","R/S\u22650","R/H"]
+      : ["S","S","S","S","S","H","H","H","S/H\u22650","H"];
+    var r15 = surr
+      ? ["S","S","S","S","S","H","H","H","R","H/R"]
+      : ["S","S","S","S","S","H","H","H","H/S\u22654","H"];
+    return [
+      {label:"17+", cells:["S","S","S","S","S","S","S","S","S","S"]},
+      {label:"16", cells:r16},
+      {label:"15", cells:r15},
+      {label:"14", cells:["S","S","S","S","S","H","H","H","H","H"]},
+      {label:"13", cells:["S","S","S/H\u2264-1","S","S","H","H","H","H","H"]},
+      {label:"12", cells:["H/S\u22653","H/S\u22652","S/H\u22640","S","S","H","H","H","H","H"]},
+      {label:"11", cells:["D","D","D","D","D","D","D","D","D","D"]},
+      {label:"10", cells:["D","D","D","D","D","D","D","D","H/D\u22654","H/D\u22653"]},
+      {label:"9",  cells:["H/D\u22651","D","D","D","D","H","H","H","H","H"]},
+      {label:"8",  cells:["H","H","H","H","H","H","H","H","H","H"]}
+    ];
+  }
+
+  function softRows(h17){
+    var a8 = h17
+      ? ["S","S","S","S","S/D\u22651","S","S","S","S","S"]
+      : ["S","S","S","S","S","S","S","S","S","S"];
+    var a7 = h17
+      ? ["Ds","Ds","Ds","Ds","Ds","S","S","H","H","H"]
+      : ["S","Ds","Ds","Ds","Ds","S","S","H","H","H"];
+    return [
+      {label:"A,9", cells:["S","S","S","S","S","S","S","S","S","S"]},
+      {label:"A,8", cells:a8},
+      {label:"A,7", cells:a7},
+      {label:"A,6", cells:["H","D","D","D","D","H","H","H","H","H"]},
+      {label:"A,5", cells:["H","H","D","D","D","H","H","H","H","H"]},
+      {label:"A,4", cells:["H","H","D","D","D","H","H","H","H","H"]},
+      {label:"A,3", cells:["H","H","H","D","D","H","H","H","H","H"]},
+      {label:"A,2", cells:["H","H","H","D","D","H","H","H","H","H"]}
+    ];
+  }
+
+  function splitRows(das){
+    var p4 = das
+      ? ["H","H","H","P","P","H","H","H","H","H"]
+      : ["H","H","H","H","H","H","H","H","H","H"];
+    var p6 = das
+      ? ["P","P","P","P","P","H","H","H","H","H"]
+      : ["H","P","P","P","P","H","H","H","H","H"];
+    var p2 = das
+      ? ["P","P","P","P","P","P","H","H","H","H"]
+      : ["H","H","P","P","P","P","H","H","H","H"];
+    return [
+      {label:"A,A", cells:["P","P","P","P","P","P","P","P","P","P"]},
+      {label:"10,10", cells:["S","S","S","P/S\u22655","P/S\u22654","S","S","S","S","S"]},
+      {label:"9,9", cells:["P","P","P","P","P","S","P","P","S","S"]},
+      {label:"8,8", cells:["P","P","P","P","P","P","P","P","P","P"]},
+      {label:"7,7", cells:["P","P","P","P","P","P","H","H","H","H"]},
+      {label:"6,6", cells:p6},
+      {label:"5,5", cells:["D","D","D","D","D","D","D","D","H","H"]},
+      {label:"4,4", cells:p4},
+      {label:"3,3", cells:p2},
+      {label:"2,2", cells:p2}
+    ];
+  }
+
+  // --- Main update ----------------------------------------------------------
+  function update(){
+    var h17  = tog("h17").on;
+    var surr = tog("ls").on;
+    var das  = !tog("nodas").on;
+    var sixfive = (groupSel("payout").id === "p65");
+
+    var he = houseEdge();
+    document.getElementById("m-edge").textContent = fmtPct(he);
+
+    // Break-even TC: count needed for edge to reach zero.
+    var beven = -he / SLOPE;
+    document.getElementById("m-beven").textContent = (beven>=0?"+":"") + beven.toFixed(1);
+
+    var countEl = document.getElementById("m-count");
+    if(he >= 0){
+      countEl.textContent = "Player-favoured off-top";
+    } else if(sixfive){
+      countEl.textContent = "No (6:5)";
+    } else if(he > -1.0){
+      countEl.textContent = "Yes";
+    } else {
+      countEl.textContent = "Marginal";
+    }
+
+    // Penetration / table conditions
+    var pen = parseInt(document.getElementById("pen").value,10);
+    var hph = parseInt(document.getElementById("hph").value,10);
+    var avg = parseInt(document.getElementById("avg").value,10);
+    document.getElementById("pen-out").textContent = pen + "%";
+    document.getElementById("hph-out").textContent = hph;
+    document.getElementById("avg-out").textContent = avg;
+
+    // Realised edge, in REAL percentage units.
+    // Model: a Wonging player who plays only TC >= +2 has an average edge of
+    // ~+0.5% per played hand (essay value). Penetration scales how often those
+    // counts arise; deeper pen => more high-count hands. We anchor the +0.5%
+    // average edge to 75% penetration and scale linearly with a floor.
+    var TARGET_EDGE = 0.5;                 // % avg edge at reference pen (75%), well-counted game
+    // Penetration factor: 1.0 at the 75% reference, rising with diminishing
+    // returns above it (deeper pen still helps, but the gain flattens) and
+    // falling toward a small floor below it (some edge survives at low pen).
+    var penFactor;
+    if(pen >= 75){
+      penFactor = 1 + (pen - 75) / 60;     // 75->1.0, 90->1.25 (was 1.33 linear)
+    } else {
+      penFactor = Math.max(0.15, (pen - 30) / (75 - 30));
+    }
+    // Rule quality 0..1: how close the game's house edge is to the -0.50 baseline.
+    // Better-than-baseline games clamp at 1; games at/below -1.0% clamp at 0.
+    var ruleScale = (he - (-1.0)) / (-0.50 - (-1.0));
+    ruleScale = Math.min(1, Math.max(0, ruleScale));
+    var realisedEdge = TARGET_EDGE * penFactor * ruleScale; // %
+    if(sixfive) realisedEdge = -0.30; // 6:5 is a losing proposition even counting
+
+    document.getElementById("m-realedge").textContent = fmtPct(realisedEdge);
+
+    var action = hph * avg;
+    document.getElementById("m-action").textContent = fmtMoney(action);
+    var hourly = action * (realisedEdge/100);
+    document.getElementById("m-hourly").textContent = fmtMoney(hourly) + "/hr";
+
+    // Per-hand Kelly / RoR
+    var tc = parseInt(document.getElementById("tc").value,10);
+    var br = parseInt(document.getElementById("br").value,10);
+    var kf = parseFloat(document.getElementById("kf").value);
+    document.getElementById("tc-out").textContent = (tc>=0?"+":"") + tc;
+    document.getElementById("br-out").textContent = br.toLocaleString();
+    document.getElementById("kf-out").textContent = kf + "\u00d7";
+
+    var edgeAtTcPct = he + SLOPE*tc;       // %
+    var edgeAtTc = edgeAtTcPct/100;        // fraction
+    document.getElementById("m-tcedge").textContent = fmtPct(edgeAtTcPct);
+
+    if(edgeAtTc > 0){
+      var fstar = edgeAtTc / SIGMA2;
+      var fullBet = fstar * br;
+      var yourBet = kf * fullBet;
+      var ror = Math.exp(-2 / kf);
+      document.getElementById("m-bet").textContent = "$" + fullBet.toFixed(2);
+      document.getElementById("m-fbet").textContent = "$" + yourBet.toFixed(2);
+      document.getElementById("m-ror").textContent = (ror*100 < 0.01) ? "<0.01%" : (ror*100).toFixed(2) + "%";
+    } else {
+      document.getElementById("m-bet").textContent = "\u2014";
+      document.getElementById("m-fbet").textContent = "min bet";
+      document.getElementById("m-ror").textContent = "no edge";
+    }
+
+    document.getElementById("strat-note").textContent =
+      "Basic strategy (" + (h17?"H17":"S17") + ", " + (das?"DAS":"no DAS") + ", " + (surr?"surrender":"no surrender") + ") with Hi-Lo deviations.";
+    buildTable(document.getElementById("t-hard"), "Total", hardRows(surr));
+    buildTable(document.getElementById("t-soft"), "Hand", softRows(h17));
+    buildTable(document.getElementById("t-split"), "Pair", splitRows(das));
+  }
+
+  renderRules();
+  ["pen","hph","avg","tc","br","kf"].forEach(function(id){
+    document.getElementById(id).addEventListener("input", update);
+  });
+  update();
+})();
+</script>
+</body>
+</html>
